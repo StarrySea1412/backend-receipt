@@ -1,0 +1,6 @@
+RUN 2026-11-19 | local isolated PostgreSQL | synthetic jobs
+SOCKET listening | second bind blocked
+POSTGRESQL 16.13
+INSERT attempts=20 inserted=1 rows=1
+ROW LOCK held=1 skip_locked_rows=0
+FENCE stale_owner_rows=0 current_owner_rows=1
