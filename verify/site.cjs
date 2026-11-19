@@ -22,9 +22,9 @@ const mime={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/jav
     assert.equal(byId.A.newKey.rows.length,2);assert.equal(byId.B.newKey.rows.length,2);
     assert.equal(byId.A.conflict.status,409);assert.equal(byId.B.conflict.status,409);
     for(const width of [1440,390]){
-      const page=await browser.newPage({viewport:{width,height:900}});const errors=[],external=[];const trustedOrigin=process.env.ARTICLE_URL?new URL(process.env.ARTICLE_URL).origin:null;
+      const page=await browser.newPage({viewport:{width,height:900}});const errors=[],external=[];
       page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
-      await page.route('**/*',route=>{const u=new URL(route.request().url());if(['127.0.0.1','localhost'].includes(u.hostname)||u.origin===trustedOrigin)return route.continue();external.push(u.origin);return route.abort();});
+      await page.route('**/*',route=>{const u=new URL(route.request().url());if(['127.0.0.1','localhost'].includes(u.hostname))return route.continue();external.push(u.origin);return route.abort();});
       const {port}=server.address();const address=process.env.ARTICLE_URL||`http://127.0.0.1:${port}/`;
       assert.equal((await page.goto(address,{waitUntil:'networkidle'})).status(),200);
       assert.match(await page.title(),/VOL\.19/);assert.equal(await page.locator('article.prose section').count(),3);
