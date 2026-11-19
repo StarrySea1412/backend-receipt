@@ -5,27 +5,52 @@ const root=path.resolve(__dirname,'..');
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript','.webp':'image/webp','.gif':'image/gif'};
 (async()=>{
   const server=http.createServer(async(req,res)=>{try{const p=new URL(req.url,'http://localhost').pathname;const f=path.resolve(root,'.'+(p==='/'?'/index.html':p));if(!f.startsWith(root+path.sep))throw Error('Invalid path');res.setHeader('Content-Type',mime[path.extname(f)]||'text/plain');res.end(await fs.readFile(f));}catch{res.writeHead(404);res.end();}});
-  await new Promise(r=>server.listen(0,'127.0.0.1',r));
-  let browser; try {
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
+  try{
     browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:{})});
-    for(const width of [1440,390]) {
-      const page=await browser.newPage({viewport:{width,height:900}});const errors=[];page.on('pageerror',err=>errors.push(err.message));page.on('console',msg=>{if(msg.type()==='error')errors.push(msg.text());});
+    const proof=JSON.parse(await fs.readFile(path.join(root,'verify/http-receipt-result.json'),'utf8'));
+    const packed=await fs.readFile(path.join(root,'lab-data.js'),'utf8');
+    const prefix='window.receiptLab = ';assert(packed.startsWith(prefix)&&packed.trimEnd().endsWith(';'),'lab-data.js wrapper');assert.deepEqual(JSON.parse(packed.slice(prefix.length).trim().replace(/;\s*$/,'')),proof);
+    assert.equal(proof.timeoutMs,2000);
+    const byId=Object.fromEntries(proof.cases.map(x=>[x.id,x]));
+    assert.match(byId.A.client,/TimeoutError/);assert.match(byId.B.client,/TimeoutError/);assert.equal(byId.A.client,byId.B.client);
+    assert.equal(byId.A.app.length,0);assert.equal(byId.B.app.length,2);
+    assert.equal(byId.A.before.length,0);assert.equal(byId.B.before.length,1);assert.match(byId.A.relay[0],/not forwarded/);assert.match(byId.B.app.join(' '),/COMMIT inserted/);assert.match(byId.B.relay[0],/response withheld/);
+    assert.equal(byId.A.retry.rows.length,1);assert.equal(byId.B.retry.rows.length,1);
+    assert.equal(byId.A.retry.body.job_id,1);assert.equal(String(byId.B.retry.body.job_id),byId.B.before[0].split(/\s+/)[0]);
+    assert.deepEqual(byId.A.conflict.rows,byId.A.retry.rows);assert.deepEqual(byId.B.conflict.rows,byId.B.retry.rows);
+    assert.equal(byId.A.newKey.rows.length,2);assert.equal(byId.B.newKey.rows.length,2);
+    assert.equal(byId.A.conflict.status,409);assert.equal(byId.B.conflict.status,409);
+    for(const width of [1440,390]){
+      const page=await browser.newPage({viewport:{width,height:900}});const errors=[],external=[];
+      page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+      await page.route('**/*',route=>{const u=new URL(route.request().url());if(['127.0.0.1','localhost'].includes(u.hostname))return route.continue();external.push(u.origin);return route.abort();});
       const {port}=server.address();const address=process.env.ARTICLE_URL||`http://127.0.0.1:${port}/`;
-      assert.equal((await page.goto(address,{waitUntil:'domcontentloaded'})).status(),200);
-      assert.match(await page.title(),/VOL\.19/);assert.equal(await page.locator('.chapter').count(),4); assert.equal(await page.locator('.ask').count(),4);
-      const anchors=await page.locator('#contents a').evaluateAll(nodes=>nodes.every(n=>document.querySelector(n.getAttribute('href'))));assert(anchors);
-      assert.match(await page.locator('#pg-output').textContent(),/attempts=20 inserted=1 rows=1/);
-      assert.match(await page.locator('#pg-output').textContent(),/stale_owner_rows=0 current_owner_rows=1/);
-      async function press(i,act,expected){await page.locator(`#d${i} button[data-act="${act}"]`).click();assert.match(await page.locator(`#d${i} [data-output]`).textContent(),expected);}
-      await press(1,'probe',/连接被拒绝/);await press(1,'listen',/LISTEN/);await press(1,'occupy',/原进程仍在监听/);await press(1,'probe',/200 OK/);await press(1,'stop',/无监听者/);await press(1,'reset',/未监听/);
-      await press(2,'lost',/DB COMMIT[\s\S]*超时[\s\S]*任务数 1/);await press(2,'retry',/复用[\s\S]*202 Accepted · job-001[\s\S]*任务数 1/);await press(2,'conflict',/409 Conflict/);await press(2,'query',/queued/);await press(2,'reset',/任务数 0/);await press(2,'query',/404/);
-      await press(3,'plain',/2 行/);await press(3,'unique',/最终 1 行/);await press(3,'skip',/0 行/);await press(3,'reset',/独立运行/);
-      await press(4,'takeover',/拒绝/);await press(4,'claim',/代次 1/);await press(4,'takeover',/拒绝/);await press(4,'expire',/到期/);await press(4,'takeover',/代次 2/);await press(4,'late',/写入 0 行/);await press(4,'finish',/succeeded/);await press(4,'finish',/写入 0 行/);await press(4,'reset',/queued/);
-      const imageResults=await page.locator('img').evaluateAll(imgs=>Promise.all(imgs.map(async img=>{img.loading='eager';try{await img.decode();return img.naturalWidth>0;}catch{return false;}}))); assert.deepEqual(imageResults,[true,true,true,true,true]);
+      assert.equal((await page.goto(address,{waitUntil:'networkidle'})).status(),200);
+      assert.match(await page.title(),/VOL\.19/);assert.equal(await page.locator('article.prose section').count(),3);
+      assert.match(await page.locator('#initial-output').textContent(),/TimeoutError/);
+      const imgs=page.locator('img');assert.equal(await imgs.count(),1);
+      const media=await imgs.evaluateAll(xs=>Promise.all(xs.map(async im=>{im.loading='eager';try{await im.decode();return im.naturalWidth>0}catch{return false}})));assert.deepEqual(media,[true]);
+      const evidence=page.locator('#evidence');
+      await page.getByRole('button',{name:'查应用追踪'}).click();assert.match(await evidence.textContent(),/没有该请求入口事件/);
+      await page.getByRole('button',{name:'查数据库'}).click();assert.match(await evidence.textContent(),/\(0 行\)/);
+      await page.getByRole('button',{name:'查中转追踪'}).click();assert.match(await evidence.textContent(),/not forwarded/);
+      await page.locator('[data-action=retry]').click();assert.match(await evidence.textContent(),/202[\s\S]*job_id[\s\S]*1/);
+      await page.locator('[data-action=conflict]').click();assert.match(await evidence.textContent(),/409[\s\S]*different payload/);
+      await page.locator('[data-action=newKey]').click();assert.match(await evidence.textContent(),/job_id  idempotency_key[\s\S]*\(2 行\)/);
+      await page.locator('#reset').click();assert.match(await evidence.textContent(),/等待取证/);
+      await page.locator('[data-case=B]').click();assert.match(await page.locator('#initial-output').textContent(),/TimeoutError/);
+      await page.locator('[data-action=app]').click();assert.match(await evidence.textContent(),/COMMIT inserted job_id=4/);
+      await page.locator('[data-action=rows]').click();assert.match(await evidence.textContent(),/4  lab-b-01[\s\S]*\(1 行\)/);
+      await page.locator('[data-action=relay]').click();assert.match(await evidence.textContent(),/HTTP 202; response withheld/);
+      await page.locator('[data-action=retry]').click();assert.match(await evidence.textContent(),/reuse job_id=4[\s\S]*job_id[\s\S]*4/);
+      await page.locator('[data-action=conflict]').click();assert.match(await evidence.textContent(),/409/);
+      await page.locator('[data-action=newKey]').click();assert.match(await evidence.textContent(),/job_id  idempotency_key[\s\S]*\(2 行\)/);
+      await page.locator('[data-case=A]').click();assert.match(await page.locator('#evidence').textContent(),/等待取证/);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth),0);
-      assert.deepEqual(errors,[]);
-      if(!process.env.ARTICLE_URL){const target=path.join(root,'shots');await fs.mkdir(target,{recursive:true});await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));await page.screenshot({path:path.join(target,`hero-${width}.png`)});for (const i of [1,2,3,4]) await page.locator(`#d${i}`).screenshot({path:path.join(target,`interaction-${i}-${width}.png`)});}
-      console.log(`${width}px: four simulations, resets, proof text, 5 media assets, chapter links, no overflow or JS errors`); await page.close();
+      assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+      if(!process.env.ARTICLE_URL){const out=path.join(root,'shots');await fs.mkdir(out,{recursive:true});await page.screenshot({path:path.join(out,`hero-${width}.png`),fullPage:true});await page.locator('#lab').screenshot({path:path.join(out,`lab-${width}.png`)});}
+      console.log(`${width}px: A/B same timeout, logs + DB distinguish, retries/409/new key, local assets, no overflow/errors/external requests`);await page.close();
     }
-  } finally {if(browser)await browser.close();server.close();}
-})().catch(e=>{console.error(e);process.exitCode=1;});
+  }finally{if(browser)await browser.close();server.close();}
+})().catch(e=>{console.error(e);process.exitCode=1});

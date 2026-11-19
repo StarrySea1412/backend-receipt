@@ -1,14 +1,18 @@
 # 服务器收到了吗 · 造物手记 VOL.19
 
-从一次丢失的 HTTP 回执倒查四个环节：端口监听、任务受理、PostgreSQL 并发写入、worker 接管。和 VOL.18 的来源留痕、K8s 手册的容器发布相邻：先判断是哪一层能为「完成」作证。
+[在线阅读](https://starrysea1412.github.io/backend-receipt/) · 2026-11-20 实验重写版。两次 `POST /jobs` 表面都超时，读者先看到相同的客户端报错，再通过应用日志、数据库、中转日志和同键重试判断发生了什么。
 
-- 网站：<https://starrysea1412.github.io/backend-receipt/>
-- 四段互动均确定性、可重放；页面是 HTML/CSS/JS，不依赖远程运行库。
-- 技术结构图为本篇 SVG，四张章节插画为画境 Image Studio MCP `generate_image`、GPT Image 2.5 Sunburst 生成并转为 WebP；插画不是实测截图。回执机插画裁切成 12 帧，经 MCP `assemble_gif` 合成装饰循环；系统偏好减少动态效果时显示静态图。
-- PostgreSQL 16.13 本地临时库实测：20 个并发同键插入只有 1 条新记录；另测持锁跳过和接管后的旧代次写入。原样记录在 `verify/pg-result.txt`。不代表生产吞吐、真实集群验收或外部副作用仅发生一次。
+- `verify/http-receipt-lab.py` 用标准库启动仅监听回环地址的 HTTP 应用和实验中转，并通过 `psql` 写临时 PostgreSQL。一次扣住请求不给应用，另一次在应用提交并返回 202 后扣住响应。客户端 `TimeoutError` 是实测捕获的。应用与中转为实验程序捕获的追踪事件，不是生产日志系统输出。
+- `verify/http-receipt-result.json` 是两案的实验记录，`lab-data.js` 只把它包装成供页面读取的离线数据。页面互动是同一份记录的视图，不重新模拟另一组状态。
+- 实验边界：单租户、合成文档、无外部 worker。旧版的 20 次并发 SQL 实验仍在 `verify/pg-lab.py` 和 `verify/pg-result.txt`；它不是这条 HTTP 链路的容量结果。
+- 画境 Image Studio MCP 生成的回执机插画只是篇末配图，不作实验依据。当前插画只是篇末配图，不作实验依据。
 
 ## 复跑
 
-已有 Playwright 时，用 `node verify/site.cjs` 复跑 1440px / 390px 的四段行为断言。也可用 `PLAYWRIGHT_MODULE` 指向已安装的包。用 `ARTICLE_URL` 指向线上版本时，跑同一套断言，不保存截图。
+请使用监听回环地址、非默认端口下的独立 PostgreSQL 16 实例，新建空白试验库 `backend_receipt_lab` 与限于本机的实验用户 `lab`。不要连接业务库；每次复跑用新库或独立实例。`--psql` 可传客户端绝对路径。
 
-`verify/pg-lab.py` 仅连接本机，需要非默认端口上的空白隔离数据库 `backend_receipt_lab`，不允许使用默认端口。脚本会在该库创建 `jobs` 表；每次使用新的临时数据库，不能用现有业务库。
+```text
+python verify/http-receipt-lab.py --port 55447 --database backend_receipt_lab --output verify/http-receipt-result.json
+```
+
+如需用另一轮数据重写页面，`lab-data.js` 应同步包含 `window.receiptLab = <JSON>;`，并核对正文中的编号。安装 Playwright 后运行 `node verify/site.cjs`，或通过 `PLAYWRIGHT_MODULE` 指向已安装的包。`ARTICLE_URL` 非空时用同一套断言核对上线版，不保存截图。
