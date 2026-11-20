@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 740" width="720" height="740" lang="zh-CN" role="img" aria-labelledby="title desc">
+  <title id="title">Worker 接管与代次检查</title>
+  <desc id="desc">任务 job-001 先由 A 以代次 1 领取。10 个模拟秒后租约到期，B 接管并把代次更新为 2。写入时核对任务 ID、状态与代次，A 的旧代次更新影响 0 行，B 的当前代次更新影响 1 行。这里只说明任务表的写入资格。</desc>
+  <defs>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#bdb094" stroke-opacity=".16"/></pattern>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#263950" stroke-width="1.7" stroke-linejoin="round"/></marker>
+    <style>text{font-family:"Microsoft YaHei",system-ui,sans-serif;fill:#263950}.title{font-size:34px;font-weight:700}.label{font-size:26px;font-weight:600}.body{font-size:24px;fill:#4f5b68}.number{font-family:Consolas,"Microsoft YaHei",monospace;font-size:32px;font-weight:700}.rule{fill:none;stroke:#263950;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.accent{fill:#8b4f1c}</style>
+  </defs>
+  <rect width="720" height="740" fill="#fbf5e6"/>
+  <rect x="1" y="1" width="718" height="738" fill="url(#grid)"/>
+  <text x="32" y="58" class="title">接管的是任务，换的是代次</text>
+  <text x="32" y="99" class="body">同一 job-001 · 写入时核对领取凭证</text>
+  <g class="rule">
+    <rect x="32" y="137" width="196" height="169" rx="6" fill="#fbf5e6"/>
+    <rect x="262" y="137" width="196" height="169" rx="6" fill="#fbf5e6" stroke="#bdb094" stroke-dasharray="5 5"/>
+    <rect x="492" y="137" width="196" height="169" rx="6" fill="#f3ddb0"/>
+    <path d="M231 220H255" marker-end="url(#arrow)"/>
+    <path d="M461 220H485" marker-end="url(#arrow)"/>
+    <path d="M590 307V338" marker-end="url(#arrow)"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="130" y="178" class="label">A 领取</text>
+    <text x="130" y="234" class="number">代次 1</text>
+    <text x="130" y="279" class="body">0s → 10s</text>
+    <text x="360" y="178" class="label">租约到期</text>
+    <circle cx="360" cy="223" r="27" class="rule" stroke="#8b4f1c"/>
+    <path d="M360 204V223H379" class="rule" stroke="#8b4f1c"/>
+    <text x="360" y="279" class="body">时钟 10s</text>
+    <text x="590" y="178" class="label">B 接管</text>
+    <text x="590" y="234" class="number accent">代次 2</text>
+    <text x="590" y="279" class="body">仍在运行</text>
+  </g>
+  <rect x="32" y="345" width="656" height="86" rx="5" fill="#f3ddb0" stroke="#263950" stroke-width="2"/>
+  <path d="M48 357V419M54 357V419" stroke="#8b4f1c" stroke-width="2"/>
+  <text x="74" y="378" class="label">任务表 / job-001</text>
+  <text x="74" y="413" class="body">当前代次 2 · running</text>
+  <rect x="527" y="368" width="139" height="39" rx="3" fill="#fbf5e6" stroke="#8b4f1c"/>
+  <text x="596" y="396" text-anchor="middle" class="body accent">权威记录</text>
+  <path d="M186 498V438M534 498V438" class="rule" marker-end="url(#arrow)"/>
+  <rect x="206" y="453" width="308" height="35" fill="#fbf5e6"/>
+  <text x="360" y="479" text-anchor="middle" class="body">核对 ID、状态与代次</text>
+  <g class="rule">
+    <rect x="32" y="504" width="308" height="137" rx="5" fill="#fbf5e6" stroke="#8b4f1c"/>
+    <rect x="380" y="504" width="308" height="137" rx="5" fill="#fbf5e6"/>
+    <path d="M305 522L319 536M319 522L305 536" stroke="#8b4f1c"/>
+    <path d="M651 529L658 536L673 519"/>
+  </g>
+  <text x="54" y="540" class="label accent">A 迟到写入</text>
+  <text x="54" y="578" class="label">代次 1 ≠ 2</text>
+  <text x="54" y="619" class="number accent">影响 0 行</text>
+  <text x="402" y="540" class="label">B 提交结果</text>
+  <text x="402" y="578" class="label">代次 2 = 2</text>
+  <text x="402" y="619" class="number">影响 1 行</text>
+  <path d="M32 661H688" stroke="#bdb094"/>
+  <text x="32" y="692" class="body">0 / 1 是更新影响行数，不是执行次数。</text>
+  <text x="32" y="725" class="body">图示只涉及任务表；外部副作用另行核对。</text>
+</svg>

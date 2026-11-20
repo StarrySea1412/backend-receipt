@@ -25,12 +25,14 @@
 <figure class="plate"><img src="assets/02-receipt.webp" width="1400" height="933" alt="持久账本上方正在出纸的机械回执机" loading="lazy"><figcaption><b>FIG. D</b> · 把「库里有任务」和「桌上有回执」分成两件事。</figcaption></figure>
 <h3>02.1 · 先给下一次查询一个编号</h3><p>在本文设计里，<code>POST /jobs</code> 成功提交任务后回 <code>202 Accepted</code> 和 <code>job_id</code>，用 <code>GET /jobs/{id}</code> 查状态。RFC 9110 的 202 不承诺处理成功；「在持久化提交之后才回」是我们额外给出的应用合同，不是状态码本身带来的保证。</p>
 <aside class="ask"><h3>经典追问：响应丢了，还没有 job_id，怎么查？</h3><p>客户端发起操作时先生成幂等键，复用它重试同一份请求。服务端把键、请求指纹和任务 ID 一起持久化，实质相同就返回原任务，不同内容按合同拒绝。不要用短暂的内存变量，也不要每重试一次就随机生成新键。生产实现还要指定键的作用域、保留期以及读写一致性；小样只用一个调用者。</p></aside>
+<figure class="diagram" id="fig-receipt"><img src="assets/05-receipt-sequence.svg" width="720" height="740" alt="丢回执时序：任务 job-001 提交成功，第一次回执丢失；同一幂等键 k-001、相同内容重试，返回原任务，数据库仍只有一条记录。" loading="lazy" decoding="async"><figcaption><b>FIG. E</b> · 回执可以丢，任务不会因此消失。沿同一个键重试，取回原来的编号；202 表示受理，不表示完成。</figcaption></figure>
 <div class="demo" id="d2" data-demo="receipt"><div class="demo-head"><b>互动 02</b><strong>丢回执实验</strong><span>同一键重试，观察任务数</span></div><div class="controls"><button data-act="lost">提交但丢回执</button><button data-act="retry">同键同内容重试</button><button data-act="conflict">同键换内容</button><button data-act="query">查任务状态</button><button data-act="reset">重来</button></div><pre aria-live="polite" data-output></pre><p class="demo-foot">确定性模拟：固定作业 job-001，提交成功后丢弃第一次响应。显示的 409 是本文给「同键不同内容」定义的合同，不是所有 API 的统一规则。</p></div>
 </section>
 <section class="chapter" id="transaction"><header><span class="chapter-num">03</span><div><p class="label">TRANSACTION · 提交</p><h2>谁能写</h2></div></header>
 <p class="lead">A 查了一次：没有。B 也查了一次：没有。两边都没有撒谎，却都可能打算写入。光在应用层补一句「先查是否存在」，挡不住并发。</p>
-<figure class="plate"><img src="assets/03-transaction.webp" width="1400" height="933" alt="两支机械臂竞争同一个账本写入槽" loading="lazy"><figcaption><b>FIG. E</b> · 创建是否唯一由约束仲裁，而不是由两个调用者各自记忆。</figcaption></figure>
+<figure class="plate"><img src="assets/03-transaction.webp" width="1400" height="933" alt="两支机械臂竞争同一个账本写入槽" loading="lazy"><figcaption><b>FIG. F</b> · 创建是否唯一由约束仲裁，而不是由两个调用者各自记忆。</figcaption></figure>
 <h3>03.1 · 唯一约束负责创建，行锁负责已有行</h3><p>任务表上给幂等键加唯一约束。用 <code>INSERT … ON CONFLICT DO NOTHING RETURNING …</code>，赢家返回新行，其他请求按既定事务与查询策略获取已有任务。不能把「没返回新行」解释为任务不存在。已存在行的读改写则可用事务与 <code>SELECT … FOR UPDATE</code>；锁会随事务释放。不把慢速网络调用塞进持锁区。</p>
+<figure class="diagram" id="fig-unique"><img src="assets/06-unique-constraint.svg" width="720" height="740" alt="20 个同键 INSERT 经唯一约束仲裁，1 次创建，19 次冲突不插入，最终留下 1 行；其他请求另行查询原任务。唯一约束负责创建，行锁负责已有行。" loading="lazy" decoding="async"><figcaption><b>FIG. G</b> · 20→1 对应下方本机实测。冲突不插入后，还要按事务与查询策略取原任务；唯一约束与行锁各守一条边界。</figcaption></figure>
 <aside class="ask"><h3>经典追问：有 SKIP LOCKED，还需要任务状态吗？</h3><p>需要。<code>SKIP LOCKED</code> 让另一个领取者暂时绕开被锁的行；它不是持久化的「已领取」。在领取事务里更新状态并提交，任务恢复再用可验证的期限与写入资格。排队选择器和进程生命周期是两套问题。</p></aside>
 <div class="evidence"><p class="label">实测 · PostgreSQL 本机一次运行</p><pre id="pg-output">SOCKET listening | second bind blocked
 POSTGRESQL 16.13
@@ -41,8 +43,9 @@ FENCE stale_owner_rows=0 current_owner_rows=1</pre><p>20 个并发客户端尝�
 </section>
 <section class="chapter" id="worker"><header><span class="chapter-num">04</span><div><p class="label">RECOVERY · 恢复</p><h2>进程可以消失</h2></div></header>
 <p class="lead">第一位 worker 领走任务，跑到一半断电。重启一个进程能恢复人手，但它并不知道前一位已经做了什么；更糟的是，前一位可能只是卡住，稍后还会回来。</p>
-<figure class="plate"><img src="assets/04-worker.webp" width="1400" height="933" alt="一支停摆的工作头和另一支等待领取任务的工作头" loading="lazy"><figcaption><b>FIG. F</b> · 执行者换了，任务编号不换；换的是写入资格。</figcaption></figure>
+<figure class="plate"><img src="assets/04-worker.webp" width="1400" height="933" alt="一支停摆的工作头和另一支等待领取任务的工作头" loading="lazy"><figcaption><b>FIG. H</b> · 执行者换了，任务编号不换；换的是写入资格。</figcaption></figure>
 <h3>04.1 · 改状态时带上领取凭证</h3><p>首次领取从 <code>queued</code> 到 <code>running</code>，记录领取者、截止时间和代次；超时后由新 worker 接管并推进代次。落结果时同时检查任务 ID、状态与代次：旧 worker 可以继续算，却不能再改这条记录。重试上限、处理超期策略和外部副作用要另定。外部动作若已发出且结果未知，先查回执、对账或交人工，不等于「安全地再执行一次」。</p>
+<figure class="diagram" id="fig-worker"><img src="assets/07-worker-fencing.svg" width="720" height="740" alt="任务 job-001 从 A 的代次 1 接管到 B 的代次 2；写入时核对任务 ID、状态与代次，旧 A 更新影响 0 行，新 B 更新影响 1 行。" loading="lazy" decoding="async"><figcaption><b>FIG. I</b> · 编号没换，代次从 1 变成 2。旧写入影响 0 行、新写入影响 1 行；这只说明任务表的写入资格。</figcaption></figure>
 <aside class="ask"><h3>经典追问：K8s 能重启容器，为什么还要做这些？</h3><p>K8s 可以让期望数量的 Pod 回来；它不知道 <code>job-001</code> 到了哪一步。就绪探针判断副本是否接流量，存活探针用于判断是否应重启；它们不会替应用保存任务或更新写入资格。上一册讲 <a href="https://starrysea1412.github.io/k8s-primer/">kubectl apply 之后发生的事</a>，这篇补的是「重启之后，任务怎么说得清」；本文没有部署 K8s 集群。</p></aside>
 <div class="demo" id="d4" data-demo="worker"><div class="demo-head"><b>互动 04</b><strong>接管台</strong><span>让旧 worker 晚一步回来</span></div><div class="controls"><button data-act="claim">A 领取</button><button data-act="expire">快进到期</button><button data-act="takeover">B 接管</button><button data-act="late">A 迟到提交</button><button data-act="finish">B 提交结果</button><button data-act="reset">重来</button></div><pre aria-live="polite" data-output></pre><p class="demo-foot">确定性模拟：点击手动推进时钟，租约为 10 个模拟秒。这里只承诺任务表的写入资格，不模拟外部系统的幂等或分布式时钟。</p></div>
 </section>

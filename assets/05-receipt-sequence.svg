@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 740" width="720" height="740" lang="zh-CN" role="img" aria-labelledby="receipt-title receipt-desc">
+  <title id="receipt-title">首回执丢失以后，同键同内容重试复用原任务</title>
+  <desc id="receipt-desc">客户端首次用幂等键 k-001 提交请求。服务端先 COMMIT，将 job-001 持久化，再返回 202，但首回执在途中丢失。客户端超时后，以同一幂等键和相同请求内容重试，服务端复用原任务，返回原 job-001。从第一次提交成功起，任务数始终为一。202 不代表处理完成；同键不同内容按本文合同返回 409。</desc>
+  <defs>
+    <pattern id="receipt-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0V24" fill="none" stroke="#bdb094" stroke-width="0.65" opacity="0.23"/>
+    </pattern>
+    <marker id="receipt-arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M2 2L10 6L2 10" fill="none" stroke="#263950" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="receipt-lost-arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M2 2L10 6L2 10" fill="none" stroke="#8b4f1c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <rect width="720" height="740" fill="#fbf5e6"/>
+  <rect width="720" height="740" fill="url(#receipt-grid)"/>
+  <g font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC',sans-serif" fill="#263950">
+    <text x="32" y="65" font-size="34" font-weight="700">回执丢了，任务还在</text>
+    <text x="32" y="103" font-size="24" fill="#4f5b68">同一幂等键 + 相同请求内容</text>
+    <path d="M32 124H688" stroke="#bdb094" stroke-width="1.2"/>
+
+    <text x="156" y="165" font-size="28" font-weight="700" text-anchor="middle">客户端</text>
+    <text x="548" y="165" font-size="28" font-weight="700" text-anchor="middle">服务端</text>
+    <path d="M156 181V578M548 181V578" stroke="#bdb094" stroke-width="1.7" stroke-dasharray="5 7"/>
+
+    <text x="352" y="207" font-size="26" text-anchor="middle">① 首次提交 · k-001</text>
+    <path d="M156 224H548" fill="none" stroke="#263950" stroke-width="2.4" marker-end="url(#receipt-arrow)"/>
+    <circle cx="156" cy="224" r="4" fill="#263950"/>
+
+    <rect x="388" y="244" width="276" height="83" rx="5" fill="#f3ddb0" stroke="#8b4f1c" stroke-width="1.6"/>
+    <text x="526" y="277" font-size="26" font-weight="700" text-anchor="middle">COMMIT → job-001</text>
+    <text x="526" y="312" font-size="26" text-anchor="middle" fill="#8b4f1c">任务已持久化 · 1 条</text>
+
+    <text x="352" y="358" font-size="26" text-anchor="middle" fill="#8b4f1c">② 首回执丢失 · 202</text>
+    <path d="M548 377H372M332 377H188" fill="none" stroke="#8b4f1c" stroke-width="2.4" stroke-dasharray="7 6"/>
+    <path d="M188 377H156" fill="none" stroke="#8b4f1c" stroke-width="2.4" stroke-dasharray="7 6" marker-end="url(#receipt-lost-arrow)" opacity="0.45"/>
+    <path d="M340 367L360 387M360 367L340 387" fill="none" stroke="#8b4f1c" stroke-width="3" stroke-linecap="round"/>
+    <text x="156" y="411" font-size="24" text-anchor="middle" fill="#4f5b68">超时：结果未知</text>
+
+    <text x="352" y="447" font-size="26" text-anchor="middle">③ 同键同内容重试</text>
+    <path d="M156 464H548" fill="none" stroke="#263950" stroke-width="2.4" marker-end="url(#receipt-arrow)"/>
+    <circle cx="156" cy="464" r="4" fill="#263950"/>
+    <text x="548" y="500" font-size="26" font-weight="700" text-anchor="middle" fill="#8b4f1c">复用原任务</text>
+
+    <text x="352" y="539" font-size="26" text-anchor="middle">④ 返回原 job-001</text>
+    <path d="M548 556H156" fill="none" stroke="#263950" stroke-width="2.4" marker-end="url(#receipt-arrow)"/>
+    <circle cx="548" cy="556" r="4" fill="#263950"/>
+
+    <rect x="32" y="590" width="656" height="52" rx="5" fill="#f3ddb0" stroke="#bdb094" stroke-width="1.2"/>
+    <text x="360" y="625" font-size="27" font-weight="700" text-anchor="middle">只复用，不新增 · 任务数 1</text>
+    <text x="32" y="668" font-size="24" fill="#4f5b68">本文先提交再回 202；202 不代表完成。</text>
+    <text x="32" y="698" font-size="24" fill="#4f5b68">同键不同内容 → 409（本文合同）。</text>
+  </g>
+</svg>

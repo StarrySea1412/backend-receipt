@@ -5,6 +5,7 @@
 - 网站：<https://starrysea1412.github.io/backend-receipt/>
 - 四段互动均确定性、可重放；页面是 HTML/CSS/JS，不依赖远程运行库。
 - 技术结构图为本篇 SVG，四张章节插画为画境 Image Studio MCP `generate_image`、GPT Image 2.5 Sunburst 生成并转为 WebP；插画不是实测截图。回执机插画裁切成 12 帧，经 MCP `assemble_gif` 合成装饰循环；系统偏好减少动态效果时显示静态图。
+- 新增三张 SVG 过程附图：丢回执与同键重试（FIG. E）、20→1 唯一约束仲裁（FIG. G）、worker 接管代次与迟到写入（FIG. I）。沿用纸色、蓝墨线和赭色标记；图中文字与本篇模型、实测记录对应，矢量图没有新增运行依赖。
 - PostgreSQL 16.13 本地临时库实测：20 个并发同键插入只有 1 条新记录；另测持锁跳过和接管后的旧代次写入。原样记录在 `verify/pg-result.txt`。不代表生产吞吐、真实集群验收或外部副作用仅发生一次。
 
 ## 复跑
